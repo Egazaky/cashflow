@@ -1,0 +1,4 @@
+# Local test & utility scripts
+tools/
+serve.ps1
+start.bat

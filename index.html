@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F3F4F6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0A0D14" media="(prefers-color-scheme: dark)">
+  <!-- iOS: jalankan full screen saat dibuka dari Home Screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Keuangan">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <title>Catatan Keuangan</title>
+</head>
+<body>
+  <!-- Ikon (gaya garis, 24x24) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <!-- UI -->
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-in" viewBox="0 0 24 24"><path d="M17 7 7 17"/><path d="M17 17H7V7"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M17 6H3"/><path d="M21 12H3"/><path d="M15 18H3"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
+    <!-- Kategori -->
+    <symbol id="c-food" viewBox="0 0 24 24"><path d="M3 2v7a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3Zm0 0v7"/></symbol>
+    <symbol id="c-car" viewBox="0 0 24 24"><path d="M19 17h2a1 1 0 0 0 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4a1 1 0 0 0 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></symbol>
+    <symbol id="c-bag" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
+    <symbol id="c-receipt" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></symbol>
+    <symbol id="c-film" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></symbol>
+    <symbol id="c-health" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/><path d="M3.2 12h6.3l.5-1 2 4.5 2-7 1.5 3.5h5.3"/></symbol>
+    <symbol id="c-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+    <symbol id="c-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></symbol>
+    <symbol id="c-briefcase" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></symbol>
+    <symbol id="c-gift" viewBox="0 0 24 24"><rect width="18" height="4" x="3" y="8" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+    <symbol id="c-store" viewBox="0 0 24 24"><path d="M2 9 4 4h16l2 5"/><path d="M2 9h20v1a3 3 0 0 1-5.5 1.7A3 3 0 0 1 12 13a3 3 0 0 1-4.5-1.3A3 3 0 0 1 2 10Z"/><path d="M4 13v8h16v-8"/><path d="M10 21v-5h4v5"/></symbol>
+    <symbol id="c-trend" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></symbol>
+    <symbol id="c-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <span class="topbar-spacer" aria-hidden="true"></span>
+    <div class="title">
+      <span class="eyebrow">Cashflow</span>
+      <h1 id="monthLabel"></h1>
+    </div>
+    <button id="menuBtn" class="icon-btn round" aria-label="Pengaturan data"><svg class="i"><use href="#i-more"/></svg></button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-label">Saldo bulan ini</div>
+      <div id="balance" class="hero-amount num">Rp0</div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <span class="badge in"><svg class="i"><use href="#i-in"/></svg></span>
+          <div><span>Pemasukan</span><strong id="totalIn" class="num">Rp0</strong></div>
+        </div>
+        <div class="hero-divider"></div>
+        <div class="hero-stat">
+          <span class="badge out"><svg class="i"><use href="#i-out"/></svg></span>
+          <div><span>Pengeluaran</span><strong id="totalOut" class="num">Rp0</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="breakdownCard">
+      <div class="panel-head">
+        <div>
+          <h2>Pengeluaran per kategori</h2>
+          <span class="panel-hint" id="chartHint">Tap grafik untuk detail</span>
+        </div>
+        <div class="chart-nav">
+          <button type="button" id="chartPrev" class="icon-btn xs" aria-label="Bulan sebelumnya"><svg class="i"><use href="#i-chevron-left"/></svg></button>
+          <span id="chartMonth" class="chart-month"></span>
+          <button type="button" id="chartNext" class="icon-btn xs" aria-label="Bulan berikutnya"><svg class="i"><use href="#i-chevron-right"/></svg></button>
+        </div>
+      </div>
+      <div class="donut-wrap" id="donutBody">
+        <svg class="donut" id="donutSvg" viewBox="0 0 180 180" aria-label="Grafik pengeluaran per kategori"></svg>
+        <button type="button" class="donut-center" id="donutCenter" aria-label="Reset pilihan kategori">
+          <span class="donut-label" id="donutLabel">Total keluar</span>
+          <strong class="donut-value num" id="donutValue">Rp0</strong>
+          <span class="donut-pct num" id="donutPct">0 kategori</span>
+        </button>
+      </div>
+      <ul class="legend" id="legend"></ul>
+    </section>
+
+    <div class="section-head">
+      <h2>Transaksi</h2>
+      <span id="txCount"></span>
+    </div>
+    <div id="txList"></div>
+  </main>
+
+  <button id="addBtn" class="fab" aria-label="Tambah transaksi"><svg class="i"><use href="#i-plus"/></svg></button>
+
+  <!-- Form tambah / edit transaksi -->
+  <div id="sheet" class="sheet-backdrop" hidden>
+    <form id="txForm" class="sheet" autocomplete="off" novalidate>
+      <div class="handle"></div>
+      <div class="sheet-head">
+        <h3 id="sheetTitle">Tambah transaksi</h3>
+        <button type="button" class="icon-btn round sm" data-close="sheet" aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button>
+      </div>
+
+      <div class="seg" data-type="expense">
+        <button type="button" data-type="expense" class="active">Pengeluaran</button>
+        <button type="button" data-type="income">Pemasukan</button>
+      </div>
+
+      <label class="field-label" for="amount">Jumlah</label>
+      <div class="amount-field">
+        <span>Rp</span>
+        <input id="amount" class="num" inputmode="numeric" placeholder="0">
+      </div>
+
+      <div class="field-label">Kategori</div>
+      <div id="catGrid" class="cat-grid"></div>
+
+      <div class="group">
+        <label class="group-row">
+          <svg class="i"><use href="#i-calendar"/></svg>
+          <span class="group-label">Tanggal</span>
+          <input id="date" type="date" required>
+        </label>
+        <label class="group-row">
+          <svg class="i"><use href="#i-note"/></svg>
+          <input id="note" placeholder="Tambahkan catatan" maxlength="80">
+        </label>
+      </div>
+
+      <button type="submit" class="btn primary block">Simpan</button>
+      <button type="button" id="deleteBtn" class="btn link-danger block" hidden>Hapus transaksi</button>
+    </form>
+  </div>
+
+  <!-- Menu pengaturan data -->
+  <div id="menu" class="sheet-backdrop" hidden>
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="sheet-head">
+        <h3>Pengaturan data</h3>
+        <button type="button" class="icon-btn round sm" data-close="menu" aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="group">
+        <button type="button" class="menu-row" id="exportBtn">
+          <span class="menu-icon"><svg class="i"><use href="#i-download"/></svg></span>
+          <span class="menu-text"><b>Backup data</b><small>Simpan semua transaksi ke file</small></span>
+          <svg class="i chev"><use href="#i-chevron-right"/></svg>
+        </button>
+        <label class="menu-row">
+          <span class="menu-icon"><svg class="i"><use href="#i-upload"/></svg></span>
+          <span class="menu-text"><b>Restore data</b><small>Pulihkan dari file backup</small></span>
+          <svg class="i chev"><use href="#i-chevron-right"/></svg>
+          <input type="file" id="importFile" accept=".json,application/json" hidden>
+        </label>
+        <button type="button" class="menu-row danger" id="clearBtn">
+          <span class="menu-icon"><svg class="i"><use href="#i-trash"/></svg></span>
+          <span class="menu-text"><b>Hapus semua data</b><small>Tidak dapat dibatalkan</small></span>
+          <svg class="i chev"><use href="#i-chevron-right"/></svg>
+        </button>
+      </div>
+      <p class="footnote">Semua data tersimpan secara lokal di perangkat ini.</p>
+    </div>
+  </div>
+
+  <!-- Dialog konfirmasi -->
+  <div id="dialog" class="dialog-backdrop" hidden>
+    <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialogTitle">
+      <h4 id="dialogTitle"></h4>
+      <p id="dialogMsg"></p>
+      <div class="dialog-actions">
+        <button type="button" id="dialogCancel" class="btn ghost">Batal</button>
+        <button type="button" id="dialogOk" class="btn primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
