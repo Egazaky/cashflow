@@ -255,6 +255,109 @@ main {
 .lg-pct { color: var(--muted); font-size: 13px; }
 .lg-amt { font-weight: 600; min-width: 96px; text-align: right; }
 
+/* ---------- Jatah Bulanan (Category Budgets) ---------- */
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 12px; border-radius: 99px;
+  background: rgba(79, 70, 229, .12); color: var(--primary);
+  font-size: 13px; font-weight: 600; flex-shrink: 0;
+  transition: transform .22s var(--ease-out), background-color .18s ease;
+}
+.pill-btn .i { width: 15px; height: 15px; stroke-width: 2.3; }
+.pill-btn:active, .pill-btn.pressed {
+  transform: scale(.93);
+  background: rgba(79, 70, 229, .2);
+}
+
+.budget-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.budget-empty {
+  text-align: center; padding: 18px 12px; border-radius: 14px;
+  background: var(--surface-2); color: var(--text-2); font-size: 13px; line-height: 1.5;
+}
+.budget-item {
+  width: 100%; text-align: left;
+  background: var(--surface-2); border-radius: 14px; padding: 12px 14px;
+  transition: transform .22s var(--ease-out), background-color .18s ease;
+}
+.budget-item:active, .budget-item.pressed {
+  transform: scale(.985);
+}
+.budget-top {
+  display: flex; align-items: center; gap: 11px;
+}
+.budget-top .tile {
+  width: 38px; height: 38px; border-radius: 11px;
+}
+.budget-head {
+  flex: 1; min-width: 0;
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+}
+.budget-name {
+  font-size: 15px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.budget-rem {
+  font-size: 14px; font-weight: 700; color: var(--pos); white-space: nowrap;
+}
+.budget-rem.warn { color: #D97706; }
+.budget-rem.over { color: var(--neg); }
+
+.budget-bar {
+  height: 7px; border-radius: 99px; background: var(--line);
+  overflow: hidden; margin: 10px 0 7px;
+}
+.budget-fill {
+  display: block; height: 100%; border-radius: 99px;
+  transition: width .45s var(--ease-out), background-color .3s ease;
+}
+.budget-meta {
+  display: flex; justify-content: space-between; font-size: 12px; color: var(--muted);
+}
+
+.tx-budget-info {
+  margin-top: 8px; padding: 9px 12px; border-radius: 11px;
+  background: var(--surface-2); color: var(--text-2);
+  font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.tx-budget-info b { color: var(--text); font-weight: 600; }
+.tx-budget-info .over { color: var(--neg); font-weight: 600; }
+.tx-budget-info .ok { color: var(--pos); font-weight: 600; }
+
+.cat { position: relative; }
+.cat-dot {
+  position: absolute; top: 6px; right: 14px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--pos); box-shadow: 0 0 0 2px var(--surface);
+}
+.cat.add-cat .tile {
+  border: 1.5px dashed var(--muted); background: transparent; color: var(--muted);
+}
+.cat.add-cat.active .tile {
+  border-style: solid; border-color: var(--primary); background: var(--primary); color: #fff;
+}
+
+.new-cat-box {
+  background: var(--surface-2); border-radius: 14px; padding: 12px 14px; margin-top: 10px;
+  animation: monthFade .22s ease-out;
+}
+.new-cat-box .field-label { margin-top: 0; }
+.new-cat-row { display: flex; gap: 8px; }
+.new-cat-row input {
+  flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; font-size: 15px;
+}
+.btn.sm-btn { padding: 10px 14px; border-radius: 10px; font-size: 14px; box-shadow: none; }
+.color-dots { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.color-dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid transparent;
+  transition: transform .2s var(--ease-spring);
+}
+.color-dot.active {
+  transform: scale(1.18);
+  border-color: var(--text);
+}
+
 /* ---------- Transaksi ---------- */
 .section-head { display: flex; justify-content: space-between; align-items: baseline; margin: 26px 4px 0; }
 .section-head h2 { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
