@@ -6,6 +6,7 @@
   const CUSTOM_CAT_KEY = 'catatan-keuangan.cats.v1';
   const GOALS_KEY = 'catatan-keuangan.goals.v1';
   const CYCLE_KEY = 'catatan-keuangan.cycle.v1';
+  const LICENSE_KEY = 'catatan-keuangan.license.v1';
 
   const CUSTOM_COLORS = ['#EA580C', '#2563EB', '#DB2777', '#7C3AED', '#059669', '#D97706', '#0891B2', '#E11D48'];
 
@@ -1392,11 +1393,273 @@
     toast('Semua data dihapus');
   });
 
+  // ---------- Lisensi & Admin Key Generator (Hangus 6 Jam / 360 Menit) ----------
+  const ADMIN_PIN = '202688';
+  const B32 = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const LICENSE_EPOCH_MS = 1735689600000; // 2025-01-01T00:00:00Z
+  const EXPIRY_MINUTES = 360; // 6 jam
+
+  function hash32(str, seed = 0x811c9dc5) {
+    let h = seed >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x85ebca6b) >>> 0;
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35) >>> 0;
+    h ^= h >>> 16;
+    return h >>> 0;
+  }
+
+  function toB32_4(num20) {
+    let s = '';
+    for (let i = 3; i >= 0; i--) {
+      s += B32[(num20 >>> (i * 5)) & 31];
+    }
+    return s;
+  }
+
+  function fromB32_4(str4) {
+    if (!str4 || str4.length !== 4) return -1;
+    let val = 0;
+    for (let i = 0; i < 4; i++) {
+      const idx = B32.indexOf(str4[i]);
+      if (idx < 0) return -1;
+      val = (val << 5) | idx;
+    }
+    return val;
+  }
+
+  function generateLicenseCode(rawEmail, nowMs = Date.now()) {
+    const email = String(rawEmail || '').trim().toLowerCase();
+    const slot20 = Math.floor((nowMs - LICENSE_EPOCH_MS) / 60000) & 0xFFFFF;
+    const mask20 = hash32('CF_MASK_2026:' + email, 0x9E3779B9) & 0xFFFFF;
+    const mac20 = hash32('CF_SIGN_2026:' + email + ':' + slot20, 0x7F4A7C15) & 0xFFFFF;
+    const partA = (slot20 ^ mask20 ^ mac20) & 0xFFFFF;
+    return `CF-${toB32_4(partA)}-${toB32_4(mac20)}`;
+  }
+
+  function verifyLicenseCode(rawEmail, rawCode, nowMs = Date.now()) {
+    const email = String(rawEmail || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) return { ok: false, reason: 'email' };
+
+    const clean = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const body = clean.startsWith('CF') && clean.length === 10 ? clean.slice(2) : clean;
+    if (body.length !== 8) return { ok: false, reason: 'format' };
+
+    const partA = fromB32_4(body.slice(0, 4));
+    const mac20 = fromB32_4(body.slice(4, 8));
+    if (partA < 0 || mac20 < 0) return { ok: false, reason: 'format' };
+
+    const mask20 = hash32('CF_MASK_2026:' + email, 0x9E3779B9) & 0xFFFFF;
+    const slot20 = (partA ^ mask20 ^ mac20) & 0xFFFFF;
+    const expectedMac20 = hash32('CF_SIGN_2026:' + email + ':' + slot20, 0x7F4A7C15) & 0xFFFFF;
+    if (mac20 !== expectedMac20) {
+      return { ok: false, reason: 'invalid' };
+    }
+
+    const nowSlot20 = Math.floor((nowMs - LICENSE_EPOCH_MS) / 60000) & 0xFFFFF;
+    let diffMinutes = (nowSlot20 - slot20) & 0xFFFFF;
+    if (diffMinutes > 0x7FFFF) diffMinutes -= 0x100000;
+
+    if (diffMinutes < -30) return { ok: false, reason: 'invalid' };
+    if (diffMinutes > EXPIRY_MINUTES) return { ok: false, reason: 'expired' };
+    return { ok: true, email };
+  }
+
+  function loadLicense() {
+    try {
+      const data = JSON.parse(localStorage.getItem(LICENSE_KEY));
+      return data && data.active && data.email ? data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveLicense(email) {
+    const payload = { active: true, email: String(email).trim().toLowerCase(), activatedAt: new Date().toISOString() };
+    localStorage.setItem(LICENSE_KEY, JSON.stringify(payload));
+    return payload;
+  }
+
+  function checkAndRenderAuth() {
+    const lic = loadLicense();
+    const authScreen = $('#authScreen');
+    const emailSub = $('#licenseEmailSub');
+    if (lic) {
+      authScreen.hidden = true;
+      if (emailSub) emailSub.textContent = lic.email;
+    } else {
+      authScreen.hidden = false;
+    }
+  }
+
+  // Format input kode otomatis huruf besar
+  $('#authCode').addEventListener('input', (e) => {
+    const clean = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const body = clean.startsWith('CF') ? clean.slice(2, 10) : clean.slice(0, 8);
+    if (!clean) {
+      e.target.value = '';
+    } else if (body.length <= 4) {
+      e.target.value = 'CF-' + body;
+    } else {
+      e.target.value = 'CF-' + body.slice(0, 4) + '-' + body.slice(4, 8);
+    }
+    $('#authError').hidden = true;
+  });
+
+  $('#authEmail').addEventListener('input', () => {
+    $('#authError').hidden = true;
+  });
+
+  $('#authForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = $('#authEmail').value.trim();
+    const code = $('#authCode').value.trim();
+    const errEl = $('#authError');
+
+    const res = verifyLicenseCode(email, code);
+    if (!res.ok) {
+      errEl.hidden = false;
+      if (res.reason === 'email') {
+        errEl.textContent = 'Masukkan alamat email pembelian yang valid.';
+      } else if (res.reason === 'expired') {
+        errEl.textContent = 'Kode aktivasi sudah kadaluarsa (melebihi batas waktu 6 jam). Hubungi penjual untuk kode baru.';
+      } else {
+        errEl.textContent = 'Email atau kode aktivasi tidak sesuai. Pastikan menggunakan email saat membeli.';
+      }
+      return;
+    }
+
+    saveLicense(res.email);
+    errEl.hidden = true;
+    checkAndRenderAuth();
+    toast('Akses berhasil diaktifkan selamanya');
+  });
+
+  // Trigger Rahasia Admin Key Generator: Tap 5x logo/judul atau ?admin di URL
+  let adminUnlocked = false;
+  let tapCount = 0;
+  let tapTimer = null;
+
+  function openAdminSheet() {
+    $('#adminPinForm').hidden = adminUnlocked;
+    $('#keygenPanel').hidden = !adminUnlocked;
+    $('#adminPinInput').value = '';
+    show('#keygenSheet');
+    setTimeout(() => {
+      if (!adminUnlocked) $('#adminPinInput').focus();
+      else $('#kgEmail').focus();
+    }, 220);
+  }
+
+  function handleSecretTap() {
+    tapCount++;
+    clearTimeout(tapTimer);
+    if (tapCount >= 5) {
+      tapCount = 0;
+      openAdminSheet();
+    } else {
+      tapTimer = setTimeout(() => { tapCount = 0; }, 1800);
+    }
+  }
+
+  $('#authLogoTap').addEventListener('click', handleSecretTap);
+  $('#brandTap').addEventListener('click', handleSecretTap);
+
+  if (location.search.includes('admin') || location.hash.includes('admin')) {
+    setTimeout(openAdminSheet, 300);
+  }
+
+  $('#adminPinForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const pin = $('#adminPinInput').value.trim();
+    if (pin !== ADMIN_PIN) return toast('PIN Admin salah');
+    adminUnlocked = true;
+    $('#adminPinForm').hidden = true;
+    $('#keygenPanel').hidden = false;
+    setTimeout(() => $('#kgEmail').focus(), 100);
+  });
+
+  let lastGenerated = { email: '', code: '', expText: '' };
+
+  $('#keygenForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = $('#kgEmail').value.trim().toLowerCase();
+    if (!email || !email.includes('@')) return toast('Masukkan email pembeli yang valid');
+
+    const now = Date.now();
+    const code = generateLicenseCode(email, now);
+    const expDate = new Date(now + EXPIRY_MINUTES * 60000);
+    const expTime = expDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    const expDay = expDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    const expText = `Hangus otomatis: ${expDay}, pukul ${expTime} (6 jam)`;
+
+    lastGenerated = { email, code, expText };
+    $('#kgOutEmail').textContent = email;
+    $('#kgOutCode').textContent = code;
+    $('#kgOutExp').textContent = expText;
+    $('#kgResult').hidden = false;
+  });
+
+  async function copyText(text, successMsg) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(successMsg);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      toast(successMsg);
+    }
+  }
+
+  $('#kgCopyCodeBtn').addEventListener('click', () => {
+    if (!lastGenerated.code) return;
+    copyText(lastGenerated.code, 'Kode disalin');
+  });
+
+  $('#kgCopyMsgBtn').addEventListener('click', () => {
+    if (!lastGenerated.code) return;
+    const appUrl = location.origin + location.pathname;
+    const msg = [
+      'Terima kasih sudah membeli aplikasi Cashflow!',
+      'Berikut data aktivasi akses Anda:',
+      '',
+      `Link Aplikasi: ${appUrl}`,
+      `Email: ${lastGenerated.email}`,
+      `Kode Aktivasi: ${lastGenerated.code}`,
+      '',
+      'Catatan: Kode aktivasi ini hanya berlaku selama 6 jam dan khusus untuk email Anda. Setelah diaktifkan, aplikasi akan terbuka selamanya di perangkat Anda.',
+    ].join('\n');
+    copyText(msg, 'Format chat pembeli disalin');
+  });
+
+  $('#kgUnlockDeviceBtn').addEventListener('click', () => {
+    saveLicense('admin@cashflow.pro');
+    checkAndRenderAuth();
+    hide('#keygenSheet');
+    toast('Perangkat ini diaktifkan (Mode Admin)');
+  });
+
+  $('#kgLockDeviceBtn').addEventListener('click', () => {
+    localStorage.removeItem(LICENSE_KEY);
+    checkAndRenderAuth();
+    hide('#keygenSheet');
+    toast('Perangkat dikunci ulang');
+  });
+
   // ---------- Offline support ----------
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
+  checkAndRenderAuth();
   render();
 })();
