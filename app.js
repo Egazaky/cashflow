@@ -5,6 +5,7 @@
   const BUDGET_KEY = 'catatan-keuangan.budgets.v1';
   const CUSTOM_CAT_KEY = 'catatan-keuangan.cats.v1';
   const GOALS_KEY = 'catatan-keuangan.goals.v1';
+  const CYCLE_KEY = 'catatan-keuangan.cycle.v1';
 
   const CUSTOM_COLORS = ['#EA580C', '#2563EB', '#DB2777', '#7C3AED', '#059669', '#D97706', '#0891B2', '#E11D48'];
 
@@ -36,11 +37,13 @@
   let budgets = loadBudgets();
   let customCats = loadCustomCats();
   let goals = loadGoals();
-  let cursor = firstOfMonth(new Date());
+  let cycleDay = loadCycleDay();
+  let cursor = getCursorForDate(new Date(), cycleDay);
 
   const form = { type: 'expense', category: null, editId: null };
   const budgetFormState = { category: 'makan', newColor: CUSTOM_COLORS[0] };
   const goalFormState = { editId: null, action: 'deposit', color: CUSTOM_COLORS[4] };
+  let tempCycleDay = cycleDay;
   const txFilter = { query: '', chip: 'all' };
 
   const shownValues = { balance: 0, in: 0, out: 0 };
@@ -98,24 +101,95 @@
   function saveGoals() {
     localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
   }
+  function loadCycleDay() {
+    const n = Number(localStorage.getItem(CYCLE_KEY));
+    return Number.isInteger(n) && n >= 1 && n <= 31 ? n : 1;
+  }
+  function saveCycleDay() {
+    localStorage.setItem(CYCLE_KEY, String(cycleDay));
+  }
 
   // ---------- Helpers ----------
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
-  function firstOfMonth(d) {
-    return new Date(d.getFullYear(), d.getMonth(), 1);
+  function daysInMonth(y, m) {
+    return new Date(y, m + 1, 0).getDate();
   }
   function ymd(d) {
     const z = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
   }
+  // Tentukan cursor bulan siklus yang menaungi suatu tanggal (mis. jika gajian tgl 20, maka tgl 10 Okt masuk siklus Sep)
+  function getCursorForDate(d, day = cycleDay) {
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    if (day <= 1) return new Date(y, m, 1);
+    const startDayThisMonth = Math.min(day, daysInMonth(y, m));
+    if (d.getDate() < startDayThisMonth) {
+      return new Date(y, m - 1, 1);
+    }
+    return new Date(y, m, 1);
+  }
+  function getCursorForDateString(dateStr, day = cycleDay) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return getCursorForDate(new Date(y, m - 1, d), day);
+  }
+  // Hitung rentang tanggal awal s/d akhir periode berdasarkan cursor & tanggal gajian
+  function getPeriodRange(cursorDate, day = cycleDay) {
+    const y = cursorDate.getFullYear();
+    const m = cursorDate.getMonth();
+    let start;
+    let end;
+    if (day <= 1) {
+      start = new Date(y, m, 1);
+      end = new Date(y, m + 1, 0);
+    } else {
+      const sDay = Math.min(day, daysInMonth(y, m));
+      start = new Date(y, m, sDay);
+      const nextY = m === 11 ? y + 1 : y;
+      const nextM = (m + 1) % 12;
+      const nextSDay = Math.min(day, daysInMonth(nextY, nextM));
+      const nextStart = new Date(nextY, nextM, nextSDay);
+      end = new Date(nextStart.getFullYear(), nextStart.getMonth(), nextStart.getDate() - 1);
+    }
+
+    const startYmd = ymd(start);
+    const endYmd = ymd(end);
+    const totalDays = Math.max(1, Math.round((end - start) / 86400000) + 1);
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let daysLeft = 0;
+    let isPast = false;
+    let isCurrent = false;
+
+    if (today >= start && today <= end) {
+      isCurrent = true;
+      daysLeft = Math.max(1, Math.round((end - today) / 86400000) + 1);
+    } else if (today < start) {
+      daysLeft = totalDays;
+    } else {
+      isPast = true;
+      daysLeft = 0;
+    }
+
+    const fmtShort = (dt) => dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    const rangeLabel = `${fmtShort(start)} – ${fmtShort(end)}`;
+
+    return { start, end, startYmd, endYmd, totalDays, daysLeft, isPast, isCurrent, rangeLabel };
+  }
+
+  function getPeriodTransactions(cursorDate = cursor) {
+    const { startYmd, endYmd } = getPeriodRange(cursorDate);
+    return txs
+      .filter((t) => t.date >= startYmd && t.date <= endYmd)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  }
+
   function catInfo(type, id) {
     const list = getCategories(type);
     return list.find((c) => c.id === id) || list.find((c) => c.id === 'lainnya') || list[0];
-  }
-  function findAnyCat(id) {
-    return [...getCategories('expense'), ...INCOME_CATS].find((c) => c.id === id) || BASE_EXPENSE_CATS[BASE_EXPENSE_CATS.length - 1];
   }
   function tint(hex, a) {
     const n = parseInt(hex.slice(1), 16);
@@ -146,29 +220,12 @@
     setTimeout(() => el.remove(), 2300);
   }
 
-  // Hitung sisa hari di bulan yang sedang dilihat (untuk Batas Aman Harian)
-  function getMonthDaysInfo(monthDate) {
-    const now = new Date();
-    const y = monthDate.getFullYear();
-    const m = monthDate.getMonth();
-    const totalDays = new Date(y, m + 1, 0).getDate();
-    const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    const viewMonthStart = new Date(y, m, 1).getTime();
-
-    if (viewMonthStart === curMonthStart) {
-      return { totalDays, daysLeft: Math.max(1, totalDays - now.getDate() + 1), isPast: false };
-    }
-    if (viewMonthStart > curMonthStart) {
-      return { totalDays, daysLeft: totalDays, isPast: false };
-    }
-    return { totalDays, daysLeft: 0, isPast: true };
-  }
-
-  // Hitung pengeluaran bulan tertentu untuk suatu kategori
-  function getCategorySpentInMonth(catId, monthKey, excludeTxId = null) {
+  // Hitung pengeluaran periode tertentu untuk suatu kategori
+  function getCategorySpentInPeriod(catId, cursorDate, excludeTxId = null) {
+    const { startYmd, endYmd } = getPeriodRange(cursorDate);
     let sum = 0;
     for (const t of txs) {
-      if (t.type === 'expense' && t.category === catId && t.date.startsWith(monthKey) && t.id !== excludeTxId) {
+      if (t.type === 'expense' && t.category === catId && t.date >= startYmd && t.date <= endYmd && t.id !== excludeTxId) {
         sum += t.amount;
       }
     }
@@ -270,7 +327,7 @@
   }
 
   // ---------- Render Jatah Bulanan + Batas Aman Harian ----------
-  function renderBudgets(byCat) {
+  function renderBudgets(byCat, period) {
     const budgetEntries = Object.entries(budgets).filter(([, limit]) => Number(limit) > 0);
     const listEl = $('#budgetList');
     const hintEl = $('#budgetHint');
@@ -283,7 +340,7 @@
       return;
     }
 
-    const { totalDays, daysLeft, isPast } = getMonthDaysInfo(cursor);
+    const { totalDays, daysLeft, isPast } = period;
     let totalLimit = 0;
     let totalSpentInBudgeted = 0;
     for (const [id, limit] of budgetEntries) {
@@ -315,7 +372,7 @@
           const safeDaily = Math.floor(rem / daysLeft);
           dailyHtml = `<div class="safe-daily num">Aman dipakai <b>${fmt(safeDaily)} / hari</b> · ${daysLeft} hari tersisa</div>`;
         } else {
-          dailyHtml = `<div class="safe-daily over">Jatah bulan ini sudah habis</div>`;
+          dailyHtml = `<div class="safe-daily over">Jatah periode ini sudah habis</div>`;
         }
 
         return `<button type="button" class="budget-item" data-cat="${id}">
@@ -422,11 +479,16 @@
 
   // ---------- Render ----------
   function render(fade) {
+    const period = getPeriodRange(cursor);
     $('#monthLabel').textContent = cursor.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
     $('#chartMonth').textContent = cursor.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+    $('#cycleBadge').textContent = `${period.rangeLabel} · ${period.daysLeft ? `${period.daysLeft} hr tersisa` : 'Selesai'}`;
+    $('#cycleMenuSub').textContent = cycleDay === 1
+      ? 'Mulai setiap tanggal 1 (awal bulan)'
+      : `Mulai setiap tanggal ${cycleDay} (${period.rangeLabel})`;
 
     if (fade) {
-      for (const sel of ['#monthLabel', '#chartMonth', '#donutBody', '#legend', '#budgetList', '#txList']) {
+      for (const sel of ['#monthLabel', '#chartMonth', '#cycleBadge', '#donutBody', '#legend', '#budgetList', '#txList']) {
         const el = $(sel);
         if (!el) continue;
         el.classList.remove('month-fade');
@@ -435,10 +497,7 @@
       }
     }
 
-    const mk = ymd(cursor).slice(0, 7);
-    const list = txs
-      .filter((t) => t.date.startsWith(mk))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+    const list = getPeriodTransactions(cursor);
 
     let totalIn = 0;
     let totalOut = 0;
@@ -458,10 +517,10 @@
     animateValue($('#totalIn'), 'in', totalIn, false);
     animateValue($('#totalOut'), 'out', totalOut, false);
 
-    // Komposisi pengeluaran per kategori (Donut chart per bulan)
+    // Komposisi pengeluaran per kategori (Donut chart per periode)
     const entries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
     if (activeCat && !byCat[activeCat]) activeCat = null;
-    $('#chartHint').textContent = entries.length ? 'Tap grafik untuk detail' : 'Belum ada pengeluaran bulan ini';
+    $('#chartHint').textContent = entries.length ? `Periode ${period.rangeLabel}` : `Belum ada pengeluaran (${period.rangeLabel})`;
     renderDonut(entries, totalOut);
 
     $('#legend').innerHTML = entries
@@ -479,8 +538,8 @@
       .join('');
     $('#legend').classList.toggle('has-active', Boolean(activeCat));
 
-    // Render Jatah Bulanan (+ Batas Aman Harian) & Target Tabungan
-    renderBudgets(byCat);
+    // Render Jatah Bulanan (+ Batas Aman Harian sesuai siklus) & Target Tabungan
+    renderBudgets(byCat, period);
     renderGoals();
 
     // Toolbar pencarian & filter transaksi
@@ -490,7 +549,7 @@
       $('#txList').innerHTML = `<div class="empty">
         <div class="empty-icon">${icon('i-doc')}</div>
         <h3>Belum ada transaksi</h3>
-        <p>Transaksi yang dicatat pada bulan ini akan tampil di sini.</p>
+        <p>Transaksi pada periode ${period.rangeLabel} akan tampil di sini.</p>
       </div>`;
       return;
     }
@@ -598,6 +657,25 @@
     });
   }
 
+  // ---------- Form Tanggal Gajian / Siklus Bulanan ----------
+  function renderCycleDays() {
+    let html = '';
+    for (let d = 1; d <= 31; d++) {
+      html += `<button type="button" class="day-btn num${d === tempCycleDay ? ' active' : ''}" data-day="${d}">${d}</button>`;
+    }
+    $('#cycleDayGrid').innerHTML = html;
+    const sampleCursor = getCursorForDate(new Date(), tempCycleDay);
+    const p = getPeriodRange(sampleCursor, tempCycleDay);
+    $('#cyclePreview').innerHTML = `<span>Siklus aktif saat ini</span><span class="num ok">${p.rangeLabel} (${p.daysLeft} hari tersisa)</span>`;
+  }
+
+  function openCycleSheet() {
+    tempCycleDay = cycleDay;
+    renderCycleDays();
+    hide('#menu');
+    show('#cycleSheet');
+  }
+
   // ---------- Form Transaksi ----------
   function setType(type, category, animateCats = true) {
     const typeChanged = form.type !== type;
@@ -640,8 +718,8 @@
     const limit = budgets[form.category];
     const c = catInfo('expense', form.category);
     const dateVal = $('#date').value || defaultDate();
-    const mk = dateVal.slice(0, 7);
-    const spentBefore = getCategorySpentInMonth(form.category, mk, form.editId);
+    const targetCursor = getCursorForDateString(dateVal);
+    const spentBefore = getCategorySpentInPeriod(form.category, targetCursor, form.editId);
     const remBefore = limit - spentBefore;
     const typed = Number($('#amount').value.replace(/\D/g, '')) || 0;
     const remAfter = remBefore - typed;
@@ -660,7 +738,8 @@
 
   function defaultDate() {
     const today = new Date();
-    return firstOfMonth(today).getTime() === cursor.getTime() ? ymd(today) : ymd(cursor);
+    const p = getPeriodRange(cursor);
+    return p.isCurrent ? ymd(today) : p.startYmd;
   }
 
   function openForm(tx) {
@@ -725,17 +804,18 @@
       return;
     }
     const c = catInfo('expense', budgetFormState.category);
-    const mk = ymd(cursor).slice(0, 7);
-    const spent = getCategorySpentInMonth(budgetFormState.category, mk);
+    const period = getPeriodRange(cursor);
+    const spent = getCategorySpentInPeriod(budgetFormState.category, cursor);
     const limit = Number($('#budgetAmount').value.replace(/\D/g, '')) || 0;
     if (!limit) {
-      previewEl.innerHTML = `<span>Terpakai <b>${esc(c.name)}</b> bulan ini</span><span class="num">${fmt(spent)}</span>`;
+      previewEl.innerHTML = `<span>Terpakai <b>${esc(c.name)}</b> periode ini</span><span class="num">${fmt(spent)}</span>`;
       return;
     }
     const rem = limit - spent;
     const cls = rem < 0 ? 'over' : 'ok';
     const remText = rem < 0 ? `Lewat −${fmt(Math.abs(rem))}` : fmt(rem);
-    previewEl.innerHTML = `<span>Terpakai ${fmt(spent)} bulan ini</span><span class="num">Sisa: <span class="${cls}">${remText}</span></span>`;
+    const dailyInfo = !period.isPast && rem > 0 ? ` · Aman ${fmt(Math.floor(rem / period.daysLeft))}/hr` : '';
+    previewEl.innerHTML = `<span>Sisa periode ini</span><span class="num"><span class="${cls}">${remText}</span>${dailyInfo}</span>`;
   }
 
   function openBudgetSheet(catId) {
@@ -834,36 +914,46 @@
   $('#openBudgetBtn').addEventListener('click', () => openBudgetSheet(null));
   $('#openGoalBtn').addEventListener('click', () => openGoalSheet(null));
 
+  // Tanggal Gajian / Siklus Bulanan events
+  $('#cycleBadge').addEventListener('click', () => openCycleSheet());
+  $('#cycleMenuBtn').addEventListener('click', () => openCycleSheet());
+
+  $('#cycleDayGrid').addEventListener('click', (e) => {
+    const btn = e.target.closest('.day-btn');
+    if (!btn) return;
+    tempCycleDay = Number(btn.dataset.day);
+    renderCycleDays();
+  });
+
+  $('#cycleForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    cycleDay = tempCycleDay;
+    saveCycleDay();
+    cursor = getCursorForDate(new Date(), cycleDay);
+    hide('#cycleSheet');
+    render(true);
+    toast(cycleDay === 1 ? 'Siklus diatur ke tanggal 1' : `Siklus diatur setiap tanggal ${cycleDay}`);
+  });
+
   // Search & Filter Transaksi
   $('#txSearch').addEventListener('input', (e) => {
     txFilter.query = e.target.value;
     $('#clearSearchBtn').hidden = !txFilter.query;
-    const mk = ymd(cursor).slice(0, 7);
-    const list = txs
-      .filter((t) => t.date.startsWith(mk))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
-    renderFilteredTxList(list);
+    renderFilteredTxList(getPeriodTransactions(cursor));
   });
 
   $('#clearSearchBtn').addEventListener('click', () => {
     txFilter.query = '';
     $('#txSearch').value = '';
     $('#clearSearchBtn').hidden = true;
-    const mk = ymd(cursor).slice(0, 7);
-    const list = txs
-      .filter((t) => t.date.startsWith(mk))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
-    renderFilteredTxList(list);
+    renderFilteredTxList(getPeriodTransactions(cursor));
   });
 
   $('#txFilterChips').addEventListener('click', (e) => {
     const btn = e.target.closest('.filter-chip');
     if (!btn) return;
     txFilter.chip = btn.dataset.chip;
-    const mk = ymd(cursor).slice(0, 7);
-    const list = txs
-      .filter((t) => t.date.startsWith(mk))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+    const list = getPeriodTransactions(cursor);
     renderFilterChips(list);
     renderFilteredTxList(list);
   });
@@ -1100,8 +1190,7 @@
       txs.push({ id: uid(), createdAt: Date.now(), ...data });
     }
     save();
-    const [y, m] = data.date.split('-').map(Number);
-    cursor = new Date(y, m - 1, 1);
+    cursor = getCursorForDateString(data.date);
     hide('#sheet');
     render();
     toast(editing ? 'Transaksi diperbarui' : 'Transaksi disimpan');
@@ -1143,7 +1232,7 @@
   });
 
   // ---------- Touch press feedback & Swipe-to-dismiss ----------
-  const pressSel = '.icon-btn, .fab, .row, .cat, .btn, .menu-row, .donut-center, .legend li, .pill-btn, .budget-item, .filter-chip';
+  const pressSel = '.icon-btn, .fab, .row, .cat, .btn, .menu-row, .donut-center, .legend li, .pill-btn, .budget-item, .filter-chip, .cycle-badge, .day-btn';
   document.addEventListener('pointerdown', (e) => {
     const el = e.target.closest(pressSel);
     if (el) el.classList.add('pressed');
@@ -1200,8 +1289,9 @@
     if (!txs.length && !Object.keys(budgets).length && !goals.length) return toast('Belum ada data untuk di-backup');
     const json = JSON.stringify({
       app: 'catatan-keuangan',
-      version: 3,
+      version: 4,
       exportedAt: new Date().toISOString(),
+      cycleDay,
       transactions: txs,
       budgets,
       customCategories: customCats,
@@ -1236,6 +1326,7 @@
     let incomingBudgets = {};
     let incomingCats = [];
     let incomingGoals = [];
+    let incomingCycle = null;
     try {
       const parsed = JSON.parse(await file.text());
       incoming = (Array.isArray(parsed) ? parsed : parsed.transactions || []).filter(
@@ -1243,6 +1334,7 @@
       if (parsed && parsed.budgets && typeof parsed.budgets === 'object') incomingBudgets = parsed.budgets;
       if (parsed && Array.isArray(parsed.customCategories)) incomingCats = parsed.customCategories;
       if (parsed && Array.isArray(parsed.goals)) incomingGoals = parsed.goals;
+      if (parsed && Number.isInteger(parsed.cycleDay) && parsed.cycleDay >= 1 && parsed.cycleDay <= 31) incomingCycle = parsed.cycleDay;
     } catch {
       incoming = [];
     }
@@ -1264,6 +1356,11 @@
     const goalMap = new Map(goals.map((g) => [g.id, g]));
     for (const g of incomingGoals) if (g && g.id && g.name) goalMap.set(g.id, g);
     goals = [...goalMap.values()];
+    if (incomingCycle) {
+      cycleDay = incomingCycle;
+      saveCycleDay();
+      cursor = getCursorForDate(new Date(), cycleDay);
+    }
     save();
     saveBudgets();
     saveCustomCats();

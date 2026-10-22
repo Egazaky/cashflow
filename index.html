@@ -61,6 +61,7 @@
     <div class="title">
       <span class="eyebrow">Cashflow</span>
       <h1 id="monthLabel"></h1>
+      <button type="button" id="cycleBadge" class="cycle-badge" aria-label="Atur tanggal gajian"></button>
     </div>
     <button id="menuBtn" class="icon-btn round" aria-label="Pengaturan data"><svg class="i"><use href="#i-more"/></svg></button>
   </header>
@@ -294,6 +295,11 @@
         <button type="button" class="icon-btn round sm" data-close="menu" aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button>
       </div>
       <div class="group">
+        <button type="button" class="menu-row" id="cycleMenuBtn">
+          <span class="menu-icon"><svg class="i"><use href="#i-calendar"/></svg></span>
+          <span class="menu-text"><b>Tanggal gajian / siklus</b><small id="cycleMenuSub">Mulai setiap tanggal 1</small></span>
+          <svg class="i chev"><use href="#i-chevron-right"/></svg>
+        </button>
         <button type="button" class="menu-row" id="exportBtn">
           <span class="menu-icon"><svg class="i"><use href="#i-download"/></svg></span>
           <span class="menu-text"><b>Backup data</b><small>Simpan semua transaksi ke file</small></span>
@@ -313,6 +319,21 @@
       </div>
       <p class="footnote">Semua data tersimpan secara lokal di perangkat ini.</p>
     </div>
+  </div>
+
+  <!-- Sheet atur tanggal gajian / siklus bulanan -->
+  <div id="cycleSheet" class="sheet-backdrop" hidden>
+    <form id="cycleForm" class="sheet" autocomplete="off" novalidate>
+      <div class="handle"></div>
+      <div class="sheet-head">
+        <h3>Tanggal gajian / siklus</h3>
+        <button type="button" class="icon-btn round sm" data-close="cycleSheet" aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button>
+      </div>
+      <p class="cycle-desc">Pilih tanggal mulai perhitungan cashflow setiap bulannya. Saldo, grafik, jatah bulanan, dan batas aman harian akan mengikuti siklus ini.</p>
+      <div id="cycleDayGrid" class="day-grid"></div>
+      <div id="cyclePreview" class="tx-budget-info"></div>
+      <button type="submit" class="btn primary block">Simpan siklus</button>
+    </form>
   </div>
 
   <!-- Dialog konfirmasi -->

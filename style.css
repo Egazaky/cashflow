@@ -89,6 +89,37 @@ h1, h2, h3, h4, p { margin: 0; }
   font-size: 20px; font-weight: 700; letter-spacing: -.02em; text-transform: capitalize; margin-top: 1px;
   transition: transform .28s var(--ease-out), opacity .28s var(--ease-out);
 }
+.cycle-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 3px; padding: 2px 9px; border-radius: 99px;
+  background: var(--surface); color: var(--text-2);
+  font-size: 11px; font-weight: 600; box-shadow: var(--shadow);
+  transition: transform .2s var(--ease-out), background-color .18s ease;
+}
+.cycle-badge:active, .cycle-badge.pressed {
+  transform: scale(.93);
+  background: var(--surface-2);
+}
+
+.cycle-desc {
+  font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 14px;
+}
+.day-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 12px;
+}
+.day-btn {
+  height: 40px; border-radius: 11px;
+  background: var(--surface-2); color: var(--text);
+  font-size: 14px; font-weight: 600;
+  display: grid; place-items: center;
+  transition: transform .2s var(--ease-spring), background-color .18s ease, color .18s ease;
+}
+.day-btn:active, .day-btn.pressed { transform: scale(.88); }
+.day-btn.active {
+  background: var(--primary); color: #fff;
+  box-shadow: 0 6px 14px -4px rgba(79, 70, 229, .55);
+  transform: scale(1.05);
+}
 
 .icon-btn {
   width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; color: var(--text-2);
