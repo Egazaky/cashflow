@@ -4,6 +4,7 @@
   const STORAGE_KEY = 'catatan-keuangan.v1';
   const BUDGET_KEY = 'catatan-keuangan.budgets.v1';
   const CUSTOM_CAT_KEY = 'catatan-keuangan.cats.v1';
+  const GOALS_KEY = 'catatan-keuangan.goals.v1';
 
   const CUSTOM_COLORS = ['#EA580C', '#2563EB', '#DB2777', '#7C3AED', '#059669', '#D97706', '#0891B2', '#E11D48'];
 
@@ -34,9 +35,14 @@
   let txs = load();
   let budgets = loadBudgets();
   let customCats = loadCustomCats();
+  let goals = loadGoals();
   let cursor = firstOfMonth(new Date());
+
   const form = { type: 'expense', category: null, editId: null };
   const budgetFormState = { category: 'makan', newColor: CUSTOM_COLORS[0] };
+  const goalFormState = { editId: null, action: 'deposit', color: CUSTOM_COLORS[4] };
+  const txFilter = { query: '', chip: 'all' };
+
   const shownValues = { balance: 0, in: 0, out: 0 };
   let activeCat = null;
   let lastEntries = [];
@@ -81,6 +87,17 @@
   function saveCustomCats() {
     localStorage.setItem(CUSTOM_CAT_KEY, JSON.stringify(customCats));
   }
+  function loadGoals() {
+    try {
+      const data = JSON.parse(localStorage.getItem(GOALS_KEY));
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
+  function saveGoals() {
+    localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
+  }
 
   // ---------- Helpers ----------
   function uid() {
@@ -96,6 +113,9 @@
   function catInfo(type, id) {
     const list = getCategories(type);
     return list.find((c) => c.id === id) || list.find((c) => c.id === 'lainnya') || list[0];
+  }
+  function findAnyCat(id) {
+    return [...getCategories('expense'), ...INCOME_CATS].find((c) => c.id === id) || BASE_EXPENSE_CATS[BASE_EXPENSE_CATS.length - 1];
   }
   function tint(hex, a) {
     const n = parseInt(hex.slice(1), 16);
@@ -124,6 +144,24 @@
     el.textContent = msg;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 2300);
+  }
+
+  // Hitung sisa hari di bulan yang sedang dilihat (untuk Batas Aman Harian)
+  function getMonthDaysInfo(monthDate) {
+    const now = new Date();
+    const y = monthDate.getFullYear();
+    const m = monthDate.getMonth();
+    const totalDays = new Date(y, m + 1, 0).getDate();
+    const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const viewMonthStart = new Date(y, m, 1).getTime();
+
+    if (viewMonthStart === curMonthStart) {
+      return { totalDays, daysLeft: Math.max(1, totalDays - now.getDate() + 1), isPast: false };
+    }
+    if (viewMonthStart > curMonthStart) {
+      return { totalDays, daysLeft: totalDays, isPast: false };
+    }
+    return { totalDays, daysLeft: 0, isPast: true };
   }
 
   // Hitung pengeluaran bulan tertentu untuk suatu kategori
@@ -231,7 +269,7 @@
     updateDonutCenter();
   }
 
-  // ---------- Render Jatah Bulanan ----------
+  // ---------- Render Jatah Bulanan + Batas Aman Harian ----------
   function renderBudgets(byCat) {
     const budgetEntries = Object.entries(budgets).filter(([, limit]) => Number(limit) > 0);
     const listEl = $('#budgetList');
@@ -245,6 +283,7 @@
       return;
     }
 
+    const { totalDays, daysLeft, isPast } = getMonthDaysInfo(cursor);
     let totalLimit = 0;
     let totalSpentInBudgeted = 0;
     for (const [id, limit] of budgetEntries) {
@@ -268,6 +307,17 @@
         const statusCls = isOver ? ' over' : isWarn ? ' warn' : '';
         const remText = isOver ? `Lewat −${fmt(Math.abs(rem))}` : `Sisa ${fmt(rem)}`;
 
+        let dailyHtml = '';
+        if (isPast) {
+          const avg = Math.round(spent / totalDays);
+          dailyHtml = `<div class="safe-daily num">Rata-rata terpakai <b>${fmt(avg)} / hari</b></div>`;
+        } else if (rem > 0) {
+          const safeDaily = Math.floor(rem / daysLeft);
+          dailyHtml = `<div class="safe-daily num">Aman dipakai <b>${fmt(safeDaily)} / hari</b> · ${daysLeft} hari tersisa</div>`;
+        } else {
+          dailyHtml = `<div class="safe-daily over">Jatah bulan ini sudah habis</div>`;
+        }
+
         return `<button type="button" class="budget-item" data-cat="${id}">
           <div class="budget-top">
             ${tile(c)}
@@ -283,8 +333,90 @@
             <span>Terpakai ${fmt(spent)}</span>
             <span>Jatah ${fmt(limit)}</span>
           </div>
+          ${dailyHtml}
         </button>`;
       })
+      .join('');
+  }
+
+  // ---------- Render Target Tabungan (Goals / Sinking Fund) ----------
+  function renderGoals() {
+    const listEl = $('#goalsList');
+    const hintEl = $('#goalsHint');
+
+    if (!goals.length) {
+      hintEl.textContent = 'Sisihkan dana untuk impianmu';
+      listEl.innerHTML = `<div class="budget-empty">
+        Belum ada target tabungan.<br>Tap <b>+ Target baru</b> untuk mulai menabung (mis. Dana Darurat, Beli Gadget, Liburan).
+      </div>`;
+      return;
+    }
+
+    let totalTarget = 0;
+    let totalSaved = 0;
+    for (const g of goals) {
+      totalTarget += g.targetAmount;
+      totalSaved += g.savedAmount;
+    }
+    const overallPct = totalTarget > 0 ? Math.min(100, Math.round((totalSaved / totalTarget) * 100)) : 0;
+    hintEl.textContent = `Terkumpul ${fmt(totalSaved)} dari ${fmt(totalTarget)} (${overallPct}%)`;
+
+    listEl.innerHTML = goals
+      .map((g) => {
+        const pct = g.targetAmount > 0 ? Math.min(100, (g.savedAmount / g.targetAmount) * 100) : 0;
+        const needed = Math.max(0, g.targetAmount - g.savedAmount);
+        const done = needed === 0 && g.targetAmount > 0;
+        const c = { icon: done ? 'i-check' : 'i-target', color: g.color || CUSTOM_COLORS[4] };
+
+        return `<button type="button" class="budget-item goal-item" data-goal="${g.id}">
+          <div class="budget-top">
+            ${tile(c)}
+            <div class="budget-head">
+              <span class="budget-name">${esc(g.name)}</span>
+              <span class="budget-rem num" style="color:${done ? 'var(--pos)' : c.color}">${Math.round(pct)}%</span>
+            </div>
+          </div>
+          <div class="budget-bar">
+            <i class="budget-fill" style="width:${pct.toFixed(1)}%;background:${done ? 'var(--pos)' : c.color}"></i>
+          </div>
+          <div class="budget-meta num">
+            <span>Terkumpul ${fmt(g.savedAmount)}</span>
+            <span>${done ? 'Target tercapai!' : `Kurang ${fmt(needed)} dari ${fmt(g.targetAmount)}`}</span>
+          </div>
+        </button>`;
+      })
+      .join('');
+  }
+
+  // ---------- Render Filter Chips Transaksi ----------
+  function renderFilterChips(monthList) {
+    const usedCats = [];
+    const seen = new Set();
+    for (const t of monthList) {
+      if (!seen.has(t.category)) {
+        seen.add(t.category);
+        usedCats.push({ id: t.category, type: t.type });
+      }
+    }
+
+    if (txFilter.chip !== 'all' && txFilter.chip !== 'expense' && txFilter.chip !== 'income' && !seen.has(txFilter.chip)) {
+      txFilter.chip = 'all';
+    }
+
+    const chips = [
+      { id: 'all', label: 'Semua' },
+      { id: 'expense', label: 'Pengeluaran' },
+      { id: 'income', label: 'Pemasukan' },
+      ...usedCats.map((u) => {
+        const c = catInfo(u.type, u.id);
+        return { id: u.id, label: c.name, color: c.color };
+      }),
+    ];
+
+    $('#txFilterChips').innerHTML = chips
+      .map((ch) => `<button type="button" class="filter-chip${txFilter.chip === ch.id ? ' active' : ''}" data-chip="${ch.id}">
+        ${ch.color ? `<span class="dot" style="background:${ch.color}"></span>` : ''}${esc(ch.label)}
+      </button>`)
       .join('');
   }
 
@@ -347,12 +479,14 @@
       .join('');
     $('#legend').classList.toggle('has-active', Boolean(activeCat));
 
-    // Render Jatah Bulanan per kategori
+    // Render Jatah Bulanan (+ Batas Aman Harian) & Target Tabungan
     renderBudgets(byCat);
+    renderGoals();
 
-    $('#txCount').textContent = list.length ? `${list.length} transaksi` : '';
-
+    // Toolbar pencarian & filter transaksi
+    $('#txToolbar').hidden = list.length === 0;
     if (!list.length) {
+      $('#txCount').textContent = '';
       $('#txList').innerHTML = `<div class="empty">
         <div class="empty-icon">${icon('i-doc')}</div>
         <h3>Belum ada transaksi</h3>
@@ -361,9 +495,46 @@
       return;
     }
 
-    // Kelompokkan per tanggal
+    renderFilterChips(list);
+    renderFilteredTxList(list);
+  }
+
+  function renderFilteredTxList(monthList) {
+    const q = txFilter.query.trim().toLowerCase();
+    const chip = txFilter.chip;
+
+    const filtered = monthList.filter((t) => {
+      if (chip === 'expense' && t.type !== 'expense') return false;
+      if (chip === 'income' && t.type !== 'income') return false;
+      if (chip !== 'all' && chip !== 'expense' && chip !== 'income' && t.category !== chip) return false;
+      if (q) {
+        const c = catInfo(t.type, t.category);
+        const hay = `${c.name} ${t.note || ''} ${t.amount}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    const isFiltering = Boolean(q) || chip !== 'all';
+    if (isFiltering) {
+      const net = filtered.reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
+      const sign = net > 0 ? '+' : net < 0 ? '−' : '';
+      $('#txCount').textContent = `${filtered.length} hasil · ${sign}${fmt(net)}`;
+    } else {
+      $('#txCount').textContent = `${monthList.length} transaksi`;
+    }
+
+    if (!filtered.length) {
+      $('#txList').innerHTML = `<div class="empty">
+        <div class="empty-icon">${icon('i-search')}</div>
+        <h3>Tidak ditemukan</h3>
+        <p>Tidak ada transaksi yang cocok dengan pencarian atau filter ini.</p>
+      </div>`;
+      return;
+    }
+
     const groups = new Map();
-    for (const t of list) {
+    for (const t of filtered) {
       if (!groups.has(t.date)) groups.set(t.date, []);
       groups.get(t.date).push(t);
     }
@@ -433,7 +604,7 @@
     form.type = type;
     const cats = getCategories(type);
     form.category = category || cats[0].id;
-    const seg = $('.seg');
+    const seg = $('#txForm .seg');
     seg.dataset.type = type;
     seg.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.type === type));
     renderCats(typeChanged && animateCats);
@@ -576,6 +747,81 @@
     if (initialCat !== '__new__') setTimeout(() => $('#budgetAmount').focus(), 220);
   }
 
+  // ---------- Form Target Tabungan (Goals) ----------
+  function renderGoalColors() {
+    $('#goalColors').innerHTML = CUSTOM_COLORS
+      .map((col) => `<button type="button" class="color-dot${col === goalFormState.color ? ' active' : ''}" data-color="${col}" style="background:${col}" aria-label="Pilih warna"></button>`)
+      .join('');
+  }
+
+  function setGoalAction(action) {
+    goalFormState.action = action;
+    const seg = $('#goalActionSeg');
+    seg.dataset.type = action;
+    seg.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.action === action));
+
+    const isEdit = action === 'edit';
+    $('#goalDeltaWrap').hidden = isEdit;
+    $('#goalDetailFields').hidden = !isEdit;
+    $('#goalDeltaAmount').value = '';
+
+    if (action === 'deposit') {
+      $('#goalDeltaLabel').textContent = 'Nominal yang ditabung';
+      $('#goalSubmitBtn').textContent = 'Tambah ke tabungan';
+      updateGoalQuickPreview();
+    } else if (action === 'withdraw') {
+      $('#goalDeltaLabel').textContent = 'Nominal yang ditarik';
+      $('#goalSubmitBtn').textContent = 'Tarik dari tabungan';
+      updateGoalQuickPreview();
+    } else {
+      $('#goalSubmitBtn').textContent = 'Simpan perubahan';
+    }
+  }
+
+  function updateGoalQuickPreview() {
+    const g = goals.find((item) => item.id === goalFormState.editId);
+    if (!g) return;
+    const delta = Number($('#goalDeltaAmount').value.replace(/\D/g, '')) || 0;
+    const after = goalFormState.action === 'deposit'
+      ? g.savedAmount + delta
+      : Math.max(0, g.savedAmount - delta);
+    const pct = g.targetAmount > 0 ? Math.min(100, Math.round((after / g.targetAmount) * 100)) : 0;
+    const previewEl = $('#goalQuickPreview');
+    if (delta > 0) {
+      previewEl.innerHTML = `<span>Saldo tabungan</span><span class="num">${fmt(g.savedAmount)} → <span class="ok">${fmt(after)} (${pct}%)</span></span>`;
+    } else {
+      const needed = Math.max(0, g.targetAmount - g.savedAmount);
+      previewEl.innerHTML = `<span>Terkumpul <b>${fmt(g.savedAmount)}</b></span><span class="num">${needed > 0 ? `Kurang ${fmt(needed)}` : 'Target tercapai!'}</span>`;
+    }
+  }
+
+  function openGoalSheet(goalId) {
+    const g = goalId ? goals.find((item) => item.id === goalId) : null;
+    goalFormState.editId = g ? g.id : null;
+    goalFormState.color = g ? g.color : CUSTOM_COLORS[4];
+    renderGoalColors();
+
+    $('#goalName').value = g ? g.name : '';
+    $('#goalTargetAmount').value = g ? numFmt.format(g.targetAmount) : '';
+    $('#goalSavedAmount').value = g && g.savedAmount ? numFmt.format(g.savedAmount) : '';
+    $('#deleteGoalBtn').hidden = !g;
+
+    if (g) {
+      $('#goalSheetTitle').textContent = g.name;
+      $('#goalQuickBox').hidden = false;
+      setGoalAction('deposit');
+      show('#goalSheet');
+      setTimeout(() => $('#goalDeltaAmount').focus(), 220);
+    } else {
+      $('#goalSheetTitle').textContent = 'Target tabungan baru';
+      $('#goalQuickBox').hidden = true;
+      $('#goalDetailFields').hidden = false;
+      $('#goalSubmitBtn').textContent = 'Simpan target';
+      show('#goalSheet');
+      setTimeout(() => $('#goalName').focus(), 220);
+    }
+  }
+
   // ---------- Events ----------
   function stepMonth(delta) {
     cursor = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
@@ -586,7 +832,43 @@
 
   $('#addBtn').addEventListener('click', () => openForm(null));
   $('#openBudgetBtn').addEventListener('click', () => openBudgetSheet(null));
+  $('#openGoalBtn').addEventListener('click', () => openGoalSheet(null));
 
+  // Search & Filter Transaksi
+  $('#txSearch').addEventListener('input', (e) => {
+    txFilter.query = e.target.value;
+    $('#clearSearchBtn').hidden = !txFilter.query;
+    const mk = ymd(cursor).slice(0, 7);
+    const list = txs
+      .filter((t) => t.date.startsWith(mk))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+    renderFilteredTxList(list);
+  });
+
+  $('#clearSearchBtn').addEventListener('click', () => {
+    txFilter.query = '';
+    $('#txSearch').value = '';
+    $('#clearSearchBtn').hidden = true;
+    const mk = ymd(cursor).slice(0, 7);
+    const list = txs
+      .filter((t) => t.date.startsWith(mk))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+    renderFilteredTxList(list);
+  });
+
+  $('#txFilterChips').addEventListener('click', (e) => {
+    const btn = e.target.closest('.filter-chip');
+    if (!btn) return;
+    txFilter.chip = btn.dataset.chip;
+    const mk = ymd(cursor).slice(0, 7);
+    const list = txs
+      .filter((t) => t.date.startsWith(mk))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+    renderFilterChips(list);
+    renderFilteredTxList(list);
+  });
+
+  // Jatah Bulanan events
   $('#budgetList').addEventListener('click', (e) => {
     const item = e.target.closest('.budget-item');
     if (item) openBudgetSheet(item.dataset.cat);
@@ -665,6 +947,108 @@
     toast(`Jatah ${c.name} dihapus`);
   });
 
+  // Target Tabungan (Goals) events
+  $('#goalsList').addEventListener('click', (e) => {
+    const item = e.target.closest('.goal-item');
+    if (item) openGoalSheet(item.dataset.goal);
+  });
+
+  $('#goalActionSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (b && b.dataset.action !== goalFormState.action) setGoalAction(b.dataset.action);
+  });
+
+  $('#goalColors').addEventListener('click', (e) => {
+    const dot = e.target.closest('.color-dot');
+    if (!dot) return;
+    goalFormState.color = dot.dataset.color;
+    renderGoalColors();
+  });
+
+  ['#goalDeltaAmount', '#goalTargetAmount', '#goalSavedAmount'].forEach((sel) => {
+    $(sel).addEventListener('input', (e) => {
+      const digits = e.target.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 13);
+      e.target.value = digits ? numFmt.format(Number(digits)) : '';
+      if (sel === '#goalDeltaAmount') updateGoalQuickPreview();
+    });
+  });
+
+  $('#goalForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const editingGoal = goalFormState.editId ? goals.find((g) => g.id === goalFormState.editId) : null;
+
+    if (editingGoal && (goalFormState.action === 'deposit' || goalFormState.action === 'withdraw')) {
+      const delta = Number($('#goalDeltaAmount').value.replace(/\D/g, ''));
+      if (!delta) {
+        toast('Masukkan nominal terlebih dahulu');
+        $('#goalDeltaAmount').focus();
+        return;
+      }
+      if (goalFormState.action === 'deposit') {
+        editingGoal.savedAmount += delta;
+        toast(`+${fmt(delta)} ditambahkan ke ${editingGoal.name}`);
+      } else {
+        editingGoal.savedAmount = Math.max(0, editingGoal.savedAmount - delta);
+        toast(`${fmt(delta)} ditarik dari ${editingGoal.name}`);
+      }
+      saveGoals();
+      hide('#goalSheet');
+      render();
+      return;
+    }
+
+    const name = $('#goalName').value.trim();
+    const targetAmount = Number($('#goalTargetAmount').value.replace(/\D/g, ''));
+    const savedAmount = Number($('#goalSavedAmount').value.replace(/\D/g, '')) || 0;
+
+    if (!name) {
+      toast('Masukkan nama target tabungan');
+      $('#goalName').focus();
+      return;
+    }
+    if (!targetAmount) {
+      toast('Masukkan target nominal');
+      $('#goalTargetAmount').focus();
+      return;
+    }
+
+    if (editingGoal) {
+      Object.assign(editingGoal, { name, targetAmount, savedAmount, color: goalFormState.color });
+      toast('Target tabungan diperbarui');
+    } else {
+      goals.push({
+        id: 'goal-' + uid(),
+        name,
+        targetAmount,
+        savedAmount,
+        color: goalFormState.color,
+        createdAt: Date.now(),
+      });
+      toast('Target tabungan ditambahkan');
+    }
+    saveGoals();
+    hide('#goalSheet');
+    render();
+  });
+
+  $('#deleteGoalBtn').addEventListener('click', async () => {
+    const g = goals.find((item) => item.id === goalFormState.editId);
+    if (!g) return;
+    const ok = await confirmDialog({
+      title: `Hapus target "${g.name}"?`,
+      message: 'Target tabungan ini akan dihapus secara permanen.',
+      ok: 'Hapus',
+      danger: true,
+    });
+    if (!ok) return;
+    goals = goals.filter((item) => item.id !== g.id);
+    saveGoals();
+    hide('#goalSheet');
+    render();
+    toast('Target tabungan dihapus');
+  });
+
+  // Transaksi events
   $('#txList').addEventListener('click', (e) => {
     const btn = e.target.closest('.row');
     if (!btn) return;
@@ -672,7 +1056,7 @@
     if (tx) openForm(tx);
   });
 
-  $('.seg').addEventListener('click', (e) => {
+  $('#txForm .seg').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (b && b.dataset.type !== form.type) setType(b.dataset.type);
   });
@@ -759,7 +1143,7 @@
   });
 
   // ---------- Touch press feedback & Swipe-to-dismiss ----------
-  const pressSel = '.icon-btn, .fab, .row, .cat, .btn, .menu-row, .donut-center, .legend li, .pill-btn, .budget-item';
+  const pressSel = '.icon-btn, .fab, .row, .cat, .btn, .menu-row, .donut-center, .legend li, .pill-btn, .budget-item, .filter-chip';
   document.addEventListener('pointerdown', (e) => {
     const el = e.target.closest(pressSel);
     if (el) el.classList.add('pressed');
@@ -813,14 +1197,15 @@
   $('#menuBtn').addEventListener('click', () => show('#menu'));
 
   $('#exportBtn').addEventListener('click', async () => {
-    if (!txs.length && !Object.keys(budgets).length) return toast('Belum ada data untuk di-backup');
+    if (!txs.length && !Object.keys(budgets).length && !goals.length) return toast('Belum ada data untuk di-backup');
     const json = JSON.stringify({
       app: 'catatan-keuangan',
-      version: 2,
+      version: 3,
       exportedAt: new Date().toISOString(),
       transactions: txs,
       budgets,
       customCategories: customCats,
+      goals,
     }, null, 2);
     const name = `keuangan-${ymd(new Date())}.json`;
     const file = new File([json], name, { type: 'application/json' });
@@ -850,16 +1235,18 @@
     let incoming;
     let incomingBudgets = {};
     let incomingCats = [];
+    let incomingGoals = [];
     try {
       const parsed = JSON.parse(await file.text());
       incoming = (Array.isArray(parsed) ? parsed : parsed.transactions || []).filter(
         (t) => t && t.id && ['income', 'expense'].includes(t.type) && Number(t.amount) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(t.date));
       if (parsed && parsed.budgets && typeof parsed.budgets === 'object') incomingBudgets = parsed.budgets;
       if (parsed && Array.isArray(parsed.customCategories)) incomingCats = parsed.customCategories;
+      if (parsed && Array.isArray(parsed.goals)) incomingGoals = parsed.goals;
     } catch {
       incoming = [];
     }
-    if (!incoming.length && !Object.keys(incomingBudgets).length) return toast('File backup tidak valid');
+    if (!incoming.length && !Object.keys(incomingBudgets).length && !incomingGoals.length) return toast('File backup tidak valid');
 
     const ok = await confirmDialog({
       title: 'Pulihkan data?',
@@ -874,19 +1261,23 @@
     const catMap = new Map(customCats.map((c) => [c.id, c]));
     for (const c of incomingCats) if (c && c.id && c.name) catMap.set(c.id, c);
     customCats = [...catMap.values()];
+    const goalMap = new Map(goals.map((g) => [g.id, g]));
+    for (const g of incomingGoals) if (g && g.id && g.name) goalMap.set(g.id, g);
+    goals = [...goalMap.values()];
     save();
     saveBudgets();
     saveCustomCats();
+    saveGoals();
     hide('#menu');
     render();
     toast('Data berhasil dipulihkan');
   });
 
   $('#clearBtn').addEventListener('click', async () => {
-    if (!txs.length && !Object.keys(budgets).length) return toast('Belum ada data');
+    if (!txs.length && !Object.keys(budgets).length && !goals.length) return toast('Belum ada data');
     const ok = await confirmDialog({
       title: 'Hapus semua data?',
-      message: 'Seluruh transaksi dan jatah bulanan akan dihapus permanen. Disarankan membuat backup terlebih dahulu.',
+      message: 'Seluruh transaksi, jatah bulanan, dan target tabungan akan dihapus permanen. Disarankan membuat backup terlebih dahulu.',
       ok: 'Hapus semua',
       danger: true,
     });
@@ -894,9 +1285,11 @@
     txs = [];
     budgets = {};
     customCats = [];
+    goals = [];
     save();
     saveBudgets();
     saveCustomCats();
+    saveGoals();
     hide('#menu');
     render();
     toast('Semua data dihapus');

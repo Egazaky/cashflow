@@ -35,6 +35,9 @@
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
     <symbol id="i-doc" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
     <symbol id="i-pie" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
     <symbol id="c-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></symbol>
     <symbol id="c-coffee" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></symbol>
     <!-- Kategori -->
@@ -116,9 +119,33 @@
       <div id="budgetList" class="budget-list"></div>
     </section>
 
+    <section class="panel" id="goalsCard">
+      <div class="panel-head">
+        <div>
+          <h2>Target tabungan</h2>
+          <span class="panel-hint" id="goalsHint">Sisihkan dana untuk impianmu</span>
+        </div>
+        <button type="button" id="openGoalBtn" class="pill-btn">
+          <svg class="i"><use href="#i-plus"/></svg>
+          <span>Target baru</span>
+        </button>
+      </div>
+      <div id="goalsList" class="budget-list"></div>
+    </section>
+
     <div class="section-head">
       <h2>Transaksi</h2>
       <span id="txCount"></span>
+    </div>
+    <div class="tx-toolbar" id="txToolbar">
+      <label class="search-box">
+        <svg class="i"><use href="#i-search"/></svg>
+        <input id="txSearch" type="search" placeholder="Cari catatan atau kategori..." autocomplete="off">
+        <button type="button" id="clearSearchBtn" class="search-clear" hidden aria-label="Bersihkan pencarian">
+          <svg class="i"><use href="#i-x"/></svg>
+        </button>
+      </label>
+      <div id="txFilterChips" class="filter-chips"></div>
     </div>
     <div id="txList"></div>
   </main>
@@ -197,6 +224,64 @@
 
       <button type="submit" class="btn primary block">Simpan jatah</button>
       <button type="button" id="deleteBudgetBtn" class="btn link-danger block" hidden>Hapus jatah kategori ini</button>
+    </form>
+  </div>
+
+  <!-- Form target tabungan (buat baru / nabung / edit) -->
+  <div id="goalSheet" class="sheet-backdrop" hidden>
+    <form id="goalForm" class="sheet" autocomplete="off" novalidate>
+      <div class="handle"></div>
+      <div class="sheet-head">
+        <h3 id="goalSheetTitle">Target tabungan baru</h3>
+        <button type="button" class="icon-btn round sm" data-close="goalSheet" aria-label="Tutup"><svg class="i"><use href="#i-x"/></svg></button>
+      </div>
+
+      <!-- Panel cepat Tambah / Tarik tabungan (muncul saat tap target yang sudah ada) -->
+      <div id="goalQuickBox" class="goal-quick-box" hidden>
+        <div class="seg" id="goalActionSeg" data-type="deposit">
+          <button type="button" data-action="deposit" class="active">+ Nabung</button>
+          <button type="button" data-action="withdraw">− Tarik dana</button>
+          <button type="button" data-action="edit">Edit target</button>
+        </div>
+
+        <div id="goalDeltaWrap">
+          <label class="field-label" id="goalDeltaLabel" for="goalDeltaAmount">Nominal ditabung</label>
+          <div class="amount-field">
+            <span>Rp</span>
+            <input id="goalDeltaAmount" class="num" inputmode="numeric" placeholder="0">
+          </div>
+          <div id="goalQuickPreview" class="tx-budget-info"></div>
+        </div>
+      </div>
+
+      <!-- Detail nama, warna, dan nominal target -->
+      <div id="goalDetailFields">
+        <label class="field-label" for="goalName">Nama target</label>
+        <div class="group" style="margin-top:0">
+          <label class="group-row">
+            <svg class="i"><use href="#i-target"/></svg>
+            <input id="goalName" placeholder="Mis. Dana Darurat, Beli iPhone, Liburan" maxlength="40">
+          </label>
+        </div>
+
+        <div class="field-label">Warna penanda</div>
+        <div id="goalColors" class="color-dots"></div>
+
+        <label class="field-label" for="goalTargetAmount">Target nominal</label>
+        <div class="amount-field">
+          <span>Rp</span>
+          <input id="goalTargetAmount" class="num" inputmode="numeric" placeholder="0">
+        </div>
+
+        <label class="field-label" for="goalSavedAmount">Saldo terkumpul saat ini (opsional)</label>
+        <div class="amount-field">
+          <span>Rp</span>
+          <input id="goalSavedAmount" class="num" inputmode="numeric" placeholder="0">
+        </div>
+      </div>
+
+      <button type="submit" id="goalSubmitBtn" class="btn primary block">Simpan target</button>
+      <button type="button" id="deleteGoalBtn" class="btn link-danger block" hidden>Hapus target tabungan</button>
     </form>
   </div>
 
