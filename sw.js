@@ -1,5 +1,5 @@
 // Naikkan versi ini kalau mau memaksa semua cache diperbarui.
-const CACHE = 'keuangan-v13';
+const CACHE = 'keuangan-v14';
 const ASSETS = [
   './',
   './index.html',

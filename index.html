@@ -364,11 +364,11 @@
           </label>
         </div>
 
-        <label class="field-label" for="authCode">Kode aktivasi</label>
+        <label class="field-label" for="authCode">Kode aktivasi (6 angka)</label>
         <div class="group" style="margin-top:0">
           <label class="group-row">
             <svg class="i"><use href="#i-key"/></svg>
-            <input id="authCode" type="text" placeholder="CF-XXXX-XXXX" maxlength="12" autocapitalize="characters" spellcheck="false" required>
+            <input id="authCode" type="text" inputmode="numeric" placeholder="000000" maxlength="6" spellcheck="false" required>
           </label>
         </div>
 
@@ -418,7 +418,7 @@
 
         <div id="kgResult" class="kg-result" hidden>
           <div class="kg-code-label">Kode aktivasi untuk <b id="kgOutEmail"></b></div>
-          <div class="kg-code num" id="kgOutCode">CF-XXXX-XXXX</div>
+          <div class="kg-code num" id="kgOutCode">000000</div>
           <div class="kg-exp" id="kgOutExp">Berlaku 6 jam</div>
           <div class="kg-actions">
             <button type="button" id="kgCopyCodeBtn" class="btn ghost">

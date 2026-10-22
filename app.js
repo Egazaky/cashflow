@@ -1393,9 +1393,8 @@
     toast('Semua data dihapus');
   });
 
-  // ---------- Lisensi & Admin Key Generator (Hangus 6 Jam / 360 Menit) ----------
+  // ---------- Lisensi & Admin Key Generator (6 Angka Acak, Hangus 6 Jam / 360 Menit) ----------
   const ADMIN_PIN = '202688';
-  const B32 = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   const LICENSE_EPOCH_MS = 1735689600000; // 2025-01-01T00:00:00Z
   const EXPIRY_MINUTES = 360; // 6 jam
 
@@ -1413,60 +1412,41 @@
     return h >>> 0;
   }
 
-  function toB32_4(num20) {
-    let s = '';
-    for (let i = 3; i >= 0; i--) {
-      s += B32[(num20 >>> (i * 5)) & 31];
-    }
-    return s;
-  }
-
-  function fromB32_4(str4) {
-    if (!str4 || str4.length !== 4) return -1;
-    let val = 0;
-    for (let i = 0; i < 4; i++) {
-      const idx = B32.indexOf(str4[i]);
-      if (idx < 0) return -1;
-      val = (val << 5) | idx;
-    }
-    return val;
+  function codeForSlot(normEmail, slot) {
+    const h = hash32('CF_OTP6_2026:' + normEmail + ':' + slot, 0x7F4A7C15);
+    return String(100000 + (h % 900000));
   }
 
   function generateLicenseCode(rawEmail, nowMs = Date.now()) {
     const email = String(rawEmail || '').trim().toLowerCase();
-    const slot20 = Math.floor((nowMs - LICENSE_EPOCH_MS) / 60000) & 0xFFFFF;
-    const mask20 = hash32('CF_MASK_2026:' + email, 0x9E3779B9) & 0xFFFFF;
-    const mac20 = hash32('CF_SIGN_2026:' + email + ':' + slot20, 0x7F4A7C15) & 0xFFFFF;
-    const partA = (slot20 ^ mask20 ^ mac20) & 0xFFFFF;
-    return `CF-${toB32_4(partA)}-${toB32_4(mac20)}`;
+    const slot = Math.floor((nowMs - LICENSE_EPOCH_MS) / 60000);
+    return codeForSlot(email, slot);
   }
 
   function verifyLicenseCode(rawEmail, rawCode, nowMs = Date.now()) {
     const email = String(rawEmail || '').trim().toLowerCase();
     if (!email || !email.includes('@')) return { ok: false, reason: 'email' };
 
-    const clean = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const body = clean.startsWith('CF') && clean.length === 10 ? clean.slice(2) : clean;
-    if (body.length !== 8) return { ok: false, reason: 'format' };
+    const code = String(rawCode || '').replace(/\D/g, '');
+    if (code.length !== 6) return { ok: false, reason: 'format' };
 
-    const partA = fromB32_4(body.slice(0, 4));
-    const mac20 = fromB32_4(body.slice(4, 8));
-    if (partA < 0 || mac20 < 0) return { ok: false, reason: 'format' };
+    const nowSlot = Math.floor((nowMs - LICENSE_EPOCH_MS) / 60000);
 
-    const mask20 = hash32('CF_MASK_2026:' + email, 0x9E3779B9) & 0xFFFFF;
-    const slot20 = (partA ^ mask20 ^ mac20) & 0xFFFFF;
-    const expectedMac20 = hash32('CF_SIGN_2026:' + email + ':' + slot20, 0x7F4A7C15) & 0xFFFFF;
-    if (mac20 !== expectedMac20) {
-      return { ok: false, reason: 'invalid' };
+    // Cek rentang aktif: toleransi -15 menit (perbedaan jam HP) s/d 360 menit (6 jam)
+    for (let diff = -15; diff <= EXPIRY_MINUTES; diff++) {
+      if (codeForSlot(email, nowSlot - diff) === code) {
+        return { ok: true, email };
+      }
     }
 
-    const nowSlot20 = Math.floor((nowMs - LICENSE_EPOCH_MS) / 60000) & 0xFFFFF;
-    let diffMinutes = (nowSlot20 - slot20) & 0xFFFFF;
-    if (diffMinutes > 0x7FFFF) diffMinutes -= 0x100000;
+    // Cek apakah kode sebenarnya asli untuk email ini tapi sudah lewat 6 jam (s/d 14 hari ke belakang)
+    for (let diff = EXPIRY_MINUTES + 1; diff <= 20160; diff++) {
+      if (codeForSlot(email, nowSlot - diff) === code) {
+        return { ok: false, reason: 'expired' };
+      }
+    }
 
-    if (diffMinutes < -30) return { ok: false, reason: 'invalid' };
-    if (diffMinutes > EXPIRY_MINUTES) return { ok: false, reason: 'expired' };
-    return { ok: true, email };
+    return { ok: false, reason: 'invalid' };
   }
 
   function loadLicense() {
@@ -1496,17 +1476,9 @@
     }
   }
 
-  // Format input kode otomatis huruf besar
+  // Format input kode hanya 6 angka
   $('#authCode').addEventListener('input', (e) => {
-    const clean = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const body = clean.startsWith('CF') ? clean.slice(2, 10) : clean.slice(0, 8);
-    if (!clean) {
-      e.target.value = '';
-    } else if (body.length <= 4) {
-      e.target.value = 'CF-' + body;
-    } else {
-      e.target.value = 'CF-' + body.slice(0, 4) + '-' + body.slice(4, 8);
-    }
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
     $('#authError').hidden = true;
   });
 
