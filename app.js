@@ -1539,10 +1539,8 @@
     toast('Akses berhasil diaktifkan selamanya');
   });
 
-  // Trigger Rahasia Admin Key Generator: Tap 5x logo/judul atau ?admin di URL
+  // Trigger Rahasia Admin Key Generator: hanya via ?admin di URL
   let adminUnlocked = false;
-  let tapCount = 0;
-  let tapTimer = null;
 
   function openAdminSheet() {
     $('#adminPinForm').hidden = adminUnlocked;
@@ -1555,22 +1553,9 @@
     }, 220);
   }
 
-  function handleSecretTap() {
-    tapCount++;
-    clearTimeout(tapTimer);
-    if (tapCount >= 5) {
-      tapCount = 0;
-      openAdminSheet();
-    } else {
-      tapTimer = setTimeout(() => { tapCount = 0; }, 1800);
-    }
-  }
-
-  $('#authLogoTap').addEventListener('click', handleSecretTap);
-  $('#brandTap').addEventListener('click', handleSecretTap);
-
-  if (location.search.includes('admin') || location.hash.includes('admin')) {
-    setTimeout(openAdminSheet, 300);
+  const urlParams = new URLSearchParams(location.search);
+  if (urlParams.has('admin') || location.hash === '#admin') {
+    setTimeout(openAdminSheet, 250);
   }
 
   $('#adminPinForm').addEventListener('submit', (e) => {
@@ -1626,7 +1611,7 @@
 
   $('#kgCopyMsgBtn').addEventListener('click', () => {
     if (!lastGenerated.code) return;
-    const appUrl = location.origin + location.pathname;
+    const appUrl = 'https://cashflow-zjtra.vercel.app/';
     const msg = [
       'Terima kasih sudah membeli aplikasi Cashflow!',
       'Berikut data aktivasi akses Anda:',
